@@ -1,0 +1,142 @@
+---
+title: "Practical Machine Learning Course Project"
+output: html_document
+---
+##Introduction
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+
+##Data
+The training data for this project are available here: 
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here: 
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment. 
+
+##Intended Results
+The goal of your project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases.
+
+##Preparing 
+In this section, we are going to load the R packages which we are going to use in this project. To make sure we can perform the Machine Learning Algorithms which are reproduciable, we also set the seed when we begin.
+
+```{r}
+library(caret)
+library(ggplot2)
+library(rpart)
+library(rpart.plot)
+library(RColorBrewer)
+library(rattle)
+library(randomForest)
+library(RCurl)
+```
+
+```{r}
+set.seed(780319)
+```
+
+##Getting Data
+The training data set can be found on the following URL:
+```{r}
+trainUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+```
+
+The testing data set can be found on the following URL:
+
+```{r}
+testUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+```
+
+###Read the data into R
+We download the data from the url above, and use the read function to load the data into R.
+```{r}
+training <- read.csv(textConnection(getURL(trainUrl)))
+testing <- read.csv(textConnection(getURL(testUrl)))
+```
+
+##Partioning and Clearning Data
+First we exame all the variable which have zero NAs. We reovme the variable which contain missing value.
+```{r}
+isAnyMissing <- sapply(testing, function (x) any(is.na(x) | x == ""))
+isPredictor <- !isAnyMissing & grepl("belt|[^(fore)]arm|dumbbell|forearm", names(isAnyMissing))
+predCandidates <- names(isAnyMissing)[isPredictor]
+predCandidates
+```
+
+```{r}
+varToInclude <- c("classe", predCandidates)
+training <- training[, varToInclude]
+dim(training)
+```
+
+Cleaning NearZeroVariance Variables
+```{r}
+myDataNZV <- nearZeroVar(training, saveMetrics=TRUE)
+```
+
+To perform some validation, we split our training data into two data set, 60% forTraining, 40% forTesting.
+```{r}
+inTrain <- createDataPartition(y = training$classe, p = 0.6, list = FALSE)
+forTraining <- training[inTrain, ]
+forTesting <- training[-inTrain, ]
+dim(forTraining)
+```
+
+##Machine Learning Algorithms: Decision Tree
+###Fitting Model
+We fit our model by the method of decision tree.
+```{r}
+modFitDT <- rpart(classe ~ ., data=forTraining, method="class")
+```
+Shows the tree:
+```{r}
+fancyRpartPlot(modFitDT)
+```
+###Prediction
+Put the testing data which we did above into the model, and show the confusion matrix:
+```{r}
+predictionsDT <- predict(modFitDT, forTesting, type = "class")
+confusionMatrix(predictionsDT, forTesting$classe)
+```
+
+##Machine Learning Algorithms: Random Forest
+###Fitting Model
+We fit our model by the method of decision tree.
+```{r}
+modFitRF <- randomForest(classe ~. , data=forTraining)
+```
+###Prediction
+Put the testing data which we did above into the model, and show the confusion matrix:
+```{r}
+predictionsRF <- predict(modFitRF, forTesting, type = "class")
+confusionMatrix(predictionsRF, forTesting$classe)
+```
+
+##Final Model
+We can see that the Random Forest algorithm perform the better result.
+```{r}
+modFitRF
+```
+
+##Submit Anwser to the Assignment
+Using the provided Test Set out-of-sample error.
+###Prediction
+```{r}
+predictionsRF2 <- predict(modFitRF, testing, type = "class")
+```
+Function to generate files with predictions to submit for assignment
+```{r}
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(predictionsRF2)
+```
+
+
